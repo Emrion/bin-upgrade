@@ -1,0 +1,29 @@
+# An example of configuration file
+# Will use it for my server
+
+#
+# Elements to comment out in system conf files
+#
+:/etc/rc.conf
+# To remove the loading of i915kms
+kld_list
+# Xorg won't start
+slim_enable
+
+:/boot/loader.conf
+# Don't load realtek-re-kmod
+if_re
+
+#
+# Commands to execute at a given stage
+#
+@ base-installed
+# Use the official FreeBSD repo kmod_*_${VERSION_MINOR} to get the right versions
+pkg delete drm-61-kmod realtek-re-kmod
+pkg install drm-61-kmod realtek-re-kmod
+
+@ after-uncomment
+# Upgrade my jails see kjail repository
+service kjail upgrade $Release
+# Update the FreeBSD loaders, see uploaders repository
+loaders-update shoot-me
