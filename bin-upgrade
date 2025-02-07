@@ -63,7 +63,6 @@ ParseConfFile()
 	ParseOk=true
 	local cln=0	# Current line number
 	local line	# Currently examined line content
-	local IsOk=true
 	local Tok_open=false
 	local Paragraph r i
 
@@ -142,7 +141,6 @@ Check()
 	echo
 	echo "Checking lines to comment..."
 	while [ $i -le $nF ]; do
-		IsOk=true
 		eval "file=\"\$file$i\""
 		eval "data=\"\$data$i\""
 		if [ -z "$data" ]; then
