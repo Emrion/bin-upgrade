@@ -329,14 +329,14 @@ DoFetch()
 
 Upgrade()
 {
-	local release="$1"
+	Release="$1"
 	local cmv tmv
 
-	if [ -z "$(echo "$release"|grep '\-RELEASE')" ]; then
+	if [ -z "$(echo "$Release"|grep '\-RELEASE')" ]; then
 			Usage
 	fi
 	hr="$(uname -r | cut -d- -f1 | tr -d .)"
-	rr="$(echo $release | cut -d- -f1 | tr -d .)"
+	rr="$(echo $Release | cut -d- -f1 | tr -d .)"
 	if [ "$rr" -lt "$hr" ]; then
 		echo "Cannot downgrade a RELEASE."
 	exit 1
@@ -346,19 +346,19 @@ Upgrade()
 		exit 1
 	fi
 	cmv=$(freebsd-version | cut -d. -f1)
-	tmv=$(echo $release | cut -d. -f1)
+	tmv=$(echo $Release | cut -d. -f1)
 	if ! [ "$cmv" = "$tmv" ]; then 
 		Major=true
 	else
 		Major=false
 	fi		
 	ParseConfFile
-	echo -e "Stage=1\nHook=0\nCom=0\nFetch=0\nInstall=0\nRelease=$release\nMajor=$Major" > $TMP_FILE
+	echo -e "Stage=1\nHook=0\nCom=0\nFetch=0\nInstall=0\nRelease=$Release\nMajor=$Major" > $TMP_FILE
 	ExecuteHook 1
 	CommentFile on
 	sed -i "" "s/Com=[0-9]/Com=1/1" $TMP_FILE
 	ExecuteHook 2
-	DoFetch $release
+	DoFetch $Release
 	RunInstall 1 # Kernel install
 	ExecuteHook 3
 	EchoBold "Reboot your machine, then run: $ScriptFullName cont"
