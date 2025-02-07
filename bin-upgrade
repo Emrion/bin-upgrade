@@ -1,0 +1,483 @@
+#!/bin/sh
+
+readonly FILE_TOK=":"
+readonly COMMENT_TOK="#"
+readonly HOOK_TOK="@"
+readonly SEDEL="!"
+readonly HOOK_DEL="#"
+readonly LHOOKS=" 1prelude 2after-comment 3before-reboot \
+4kernel-ok 5base-installed 6after-uncomment 7major-upgrade 8pkg-upgraded"
+readonly MAX_HOOKS="8"
+readonly Bold=`tput bold`
+readonly Normal=`tput sgr0`
+
+EchoBold()
+{
+	echo "$Bold$1$Normal"
+}
+
+# Complain  (warning | error) message [LineNumber LineContent] 
+Complain()
+{
+	local m="$1"
+	local message="$2"
+	local LineNumber="$3"
+	local LineContent="$4"
+
+	local Stop=false
+	case "$m" in
+		w*) m="Warning";;
+		e*) m="Error" 
+		    Stop=true ;;
+	esac
+
+	if [ -n "$LineNumber" ] && [ -n "$LineContent" ]; then
+		echo "$m, line $LineNumber of $CFILE: \"$LineContent\""
+	else
+		echo -n "$m, "
+	fi
+	echo  "$message."
+	if ($Stop); then
+		exit 1
+	fi	
+}
+
+# CheckMiss Tok_open Paragraph LineNumber
+CheckMiss()
+{
+	local type
+	if ($1); then
+		case "$2" in
+			$FILE_TOK*) type="File" ;;
+			$HOOK_TOK*) type="Hook" ;;	
+		esac
+		Complain w "$type line without data" "$3" "$2"
+		ParseOk=false	
+	fi
+}
+
+ParseConfFile()
+{
+	nF=0		# global, number of files to address
+	local idH	
+	ParseOk=true
+	local cln=0	# Current line number
+	local line	# Currently examined line content
+	local IsOk=true
+	local Tok_open=false
+	local Paragraph r i
+
+	echo "Parsing $CFILE..."
+	while read -r line || [ -n "$line" ]; do
+		cln=$((cln+1))
+		# Delete space and tab that begin the line
+		line="$(echo "$line" | sed -e 's/^[ \t]*//')"
+		case "$line" in
+			$COMMENT_TOK*) ;;
+			$FILE_TOK*) 
+				nF=$((nF+1))
+				line="$(echo "$line" | cut -c2-)"
+				eval "file$nF=\"$line\"" 
+				if ! [ -e "$line" ]; then
+					Complain e "this file doesn't exist" $cln "$line"
+				fi 
+				CheckMiss $Tok_open "$Paragraph" $cln
+				Tok_open=true
+				Paragraph="$FILE_TOK$line"
+				;;
+			$HOOK_TOK*)
+				CheckMiss $Tok_open "$Paragraph" $cln
+				line="$(echo -n "$line" | sed "s/[$HOOK_TOK \t]//g")"
+				Tok_open=true
+				r="$(echo "$LHOOKS"|egrep -o " [0-9]$line")"
+				if [ -z "$r" ]; then
+					Complain e "Illegal hook name" "$cln" "$line"
+				fi
+				idH="$(echo "$r" | cut -c2)"
+				r="$(echo "$r"| cut -c3-)"
+				Paragraph="$HOOK_TOK$r" ;;			
+			*)
+				if [ -n "$Paragraph" ];  then
+					
+					if [ -z "$line" ]; then
+						continue
+					fi
+					Tok_open=false
+
+					case "$Paragraph" in
+						$FILE_TOK*)
+							eval "data${nF}=$(echo -e \"\$line\\n\$data${nF}\")" ;;
+						$HOOK_TOK*)
+							if [ "$(echo "$line"|fgrep -c "$HOOK_DEL")" -ne "0" ]; then
+								Complain e "Prohibited character: $HOOK_DEL" "$cln" "$line"
+								exit 1
+							fi
+							eval "hook${idH}_cmd="$(echo \"\$hook${idH}_cmd\$line\$HOOK_DEL\")""
+							;;
+					esac	
+				else
+					if [ -n "$line" ]; then 
+						Complain w "Data line without owner" $cln "$line"
+						ParseOk=false
+					fi
+	 
+				fi ;;		
+		esac
+	done < "$CFILE"
+ 
+	CheckMiss $Tok_open "$Paragraph" $cln
+	if [ $nF -eq 0 ]; then
+		Complain w "no file name declared in $CFILE"
+	fi
+	if ($ParseOk); then
+		echo "Conf file is ok."
+	fi
+}
+
+Check()
+{
+	local i=1
+	local file data nO tokenline
+
+	echo
+	echo "Checking lines to comment..."
+	while [ $i -le $nF ]; do
+		IsOk=true
+		eval "file=\"\$file$i\""
+		eval "data=\"\$data$i\""
+		if [ -z "$data" ]; then
+			Complain w "this file has no data line"
+		else
+			echo -n "$data" | while read -r tokenline; do
+				nO=$(fgrep -c "$tokenline" "$file")
+				if [ "$nO" -eq "0" ]; then
+					Complain w "no occurence of \"$tokenline\" in $file"
+				fi
+				if [ "$nO" -gt "1" ]; then
+					Complain w "$nO occurences of \"$tokenline\" in $file"
+				fi
+			done	
+		fi
+		i=$((i+1))
+	done
+	CommentFile check
+
+	echo
+	echo "Checking hook commands..."
+	for i in $(seq 1 $MAX_HOOKS); do
+		eval "r=\"\$hook${i}_cmd\""	
+		eval "n=\"\$hook${i}_name\""
+		echo -n "$n:"
+		if [ -n "$r" ]; then
+			echo
+			cmd="$(echo "$r" | cut -f1 -d$HOOK_DEL)"
+			i=1
+			while [ -n "$cmd" ]; do
+				echo "$cmd"
+				i=$((i+1))
+				cmd="$(echo "$r" | cut -f$i -d$HOOK_DEL)"
+			done
+		else
+			echo " no hook."
+		fi
+	done
+}
+
+# Comment mode
+Comment()
+{
+	local target="$2"
+	local replace fc Etarget exp
+
+	# Escape sed delimiter $SEDEL, \, / and &
+	Etarget=$(echo -n "$target" | sed -e "s/[$SEDEL\\/\&]/\\\&/g")
+	fc=$(echo "$Etarget"|cut -c1)
+	case "$1" in
+		on) 
+			if [ "$fc" = "#" ]; then
+				echo "$file: line is already commented \"$target\""
+				return
+			else
+				replace="#$Etarget" 
+			fi ;;
+		off) 
+			if [ "$fc" = "#" ]; then
+				replace=$(echo "$Etarget"| cut -c2-)
+			else
+				echo "$file: cannot uncomment \"$target\""
+				return
+			fi ;;
+		check)
+			if [ "$fc" = "#" ]; then
+				replace="$target"echo "$Bold$1$Normal"
+			else
+				replace="#$target" 
+			fi ;;
+			
+		*) return ;;
+	esac
+
+	if [ "$mode" = "check" ]; then
+		echo "$target --> $replace"
+	else
+		sed -i "" -E "s${SEDEL}$Etarget${SEDEL}$replace${SEDEL}1" "$file"
+	fi	
+}
+
+CommentFile()
+{
+	local mode="$1"
+	local i=1
+	local file data line subline tokenline
+
+	while [ $i -le $nF ]; do
+		eval "file=\"\$file$i\""
+		eval "data=\"\$data$i\""
+		i=$((i+1))
+		if [ -z "$data" ]; then
+			continue
+		fi
+		if [ "$mode" = "check" ]; then
+			echo "Will adjust file: $file..."
+		else
+			EchoBold "Adjusting file: $file..."
+		fi
+		echo -n "$data" | while read -r tokenline; do
+			line=$(grep "$tokenline" "$file")
+			if [ -z "$line" ]; then
+				continue
+			fi
+			# Use read in case there are several lines in the grep answer
+			echo "$line" | while read -r subline; do
+				Comment "$mode" "$subline"
+			done 
+		done
+	done
+}
+
+# ExecuteHook StageNumber
+ExecuteHook()
+{
+	local r s
+	eval "r=\"\$hook$1_cmd\""
+	eval "s=\"\$hook$1_name\""
+	EchoBold "Current stage: $s"
+	sed -i "" "s/Stage=[0-9]/Stage=$1/1" $TMP_FILE
+	sed -i "" "s/Hook=[0-9]/Hook=0/1" $TMP_FILE
+	if [ -n "$r" ]; then
+		cmd="$(echo "$r" | cut -f1 -d$HOOK_DEL)"
+		i=1
+		while [ -n "$cmd" ]; do
+			EchoBold "$ScriptName is executing: $cmd"
+			eval "$cmd"
+			i=$((i+1))
+			cmd="$(echo "$r" | cut -f$i -d$HOOK_DEL)"
+		done
+	fi
+	sed -i "" "s/Hook=[0-9]/Hook=1/1" $TMP_FILE
+}
+
+Clean()
+{
+	rm $TMP_FILE  > /dev/null 2>&1
+}
+
+Usage()
+{
+	# global ScriptName
+cat << EndOfHelp
+Usage: $ScriptName command
+command can be one of:
+   check: try to parse the conf file.
+   com: comment the speficied lines in the designated files.
+   uncom: uncomment the speficied lines in the designated files.
+   cont: to use after kernel upgrade and reboot.
+   clean: to reset the upgrade process (remove temp file).
+   XX.x-RELEASE: upgrade to this release.
+EndOfHelp
+	exit 1
+}
+
+# RunInstall stage
+RunInstall()
+{
+	freebsd-update install	
+	if  [ $? -eq 0 ]; then
+		sed -i "" "s/Install=[0-9]/Install=$1/1" $TMP_FILE
+	else
+		case "$1" in
+			1) n="kernel installation";;
+			2) n="base installation";;
+			3) n="old files removing" ;;
+		esac
+		EchoBold "Error during the $n."
+		exit 1
+	fi
+}
+
+# DoFetch release
+DoFetch()
+{
+	freebsd-update -r "$1" upgrade
+	if  [ $? -eq 0 ]; then
+		sed -i "" "s/Fetch=[0-9]/Fetch=1/1" $TMP_FILE
+	else
+		EchoBold "Error during the fetching of patches."
+		exit 1
+	fi
+}
+
+Upgrade()
+{
+	local release="$1"
+	local cmv tmv
+
+	if [ -z "$(echo "$release"|grep '\-RELEASE')" ]; then
+			Usage
+	fi
+	hr="$(uname -r | cut -d- -f1 | tr -d .)"
+	rr="$(echo $release | cut -d- -f1 | tr -d .)"
+	if [ "$rr" -lt "$hr" ]; then
+		echo "Cannot downgrade a RELEASE."
+	exit 1
+	fi
+	if [ "$rr" -eq "$hr" ]; then
+		echo "Nothing to do!"
+		exit 1
+	fi
+	cmv=$(freebsd-version | cut -d. -f1)
+	tmv=$(echo $release | cut -d. -f1)
+	if ! [ "$cmv" = "$tmv" ]; then 
+		Major=true
+	else
+		Major=false
+	fi		
+	ParseConfFile
+	echo -e "Stage=1\nHook=0\nCom=0\nFetch=0\nInstall=0\nRelease=$release\nMajor=$Major" > $TMP_FILE
+	ExecuteHook 1
+	CommentFile on
+	sed -i "" "s/Com=[0-9]/Com=1/1" $TMP_FILE
+	ExecuteHook 2
+	DoFetch $release
+	RunInstall 1 # Kernel install
+	ExecuteHook 3
+	EchoBold "Reboot your machine, then run: $ScriptFullName cont"
+}
+
+Continue()
+{
+	local rk ik
+
+	. $TMP_FILE
+	if ! [ "$Hook" -eq "1" ]; then
+		ExecuteHook "$Stage"
+	fi
+	
+	case "$Stage" in
+
+		1) if [ "$Com" -ne "1" ]; then
+			CommentFile on
+			sed -i "" "s/Com=[0-9]/Com=1/1" $TMP_FILE
+		   fi
+		   ExecuteHook 2
+		   Continue ;;
+
+		2) if [ "$Fetch" -ne "1" ]; then
+			DoFetch	"$Release"
+		   fi
+		   if [ "$Install" -ne "1" ]; then
+			RunInstall 1
+		   fi
+		   ExecuteHook 3
+		   EchoBold "Reboot your machine, then run: $ScriptFullName cont"
+		   exit 0 ;;
+
+		3) rk="$(freebsd-version -r | cut -d - -f 1 | tr -d .)"
+		   ik="$(freebsd-version -k | cut -d - -f 1 | tr -d .)"
+		   if ! [ "$rk" = "$ik" ]; then
+			echo "The kernel is not upgraded. Did you reboot?"
+			exit 1
+		   fi
+		   ExecuteHook 4
+		   RunInstall 2 # Base install
+		   Continue ;;
+			
+		4) if [ "$Install" -ne "2" ]; then
+			RunInstall 2
+		   fi
+		   ExecuteHook 5
+		   Continue ;;
+
+		5) CommentFile off
+		   sed -i "" "s/Com=[0-9]/Com=0/1" $TMP_FILE
+		   ExecuteHook 6
+		   Continue ;;
+			
+		6) if [ "$Com" -ne "0" ]; then
+			CommentFile off
+			sed -i "" "s/Com=[0-9]/Com=1/1" $TMP_FILE
+		   fi
+		   if ! ($Major); then
+			Clean 
+		   	EchoBold "Minor upgrade complete." 
+			exit 0
+		   else
+			ExecuteHook 7
+			Continue
+		   fi ;;
+
+		7) EchoBold "Change of major version -> Upgrade of all packages."
+		   pkg-static upgrade -f
+		   if [ "$?" -ne "0" ]; then
+			EchoBold "Error during pkg upgrade. Correct the problem, then run: $ScriptName cont."
+			exit 1
+		   fi
+		   ExecuteHook 8
+		   Continue ;;
+
+		8) echo -n "${Bold}Ok to remove old shared files (y/N)? $Normal"
+		   read rep
+		   case "$rep" in
+			[yY]*)	RunInstall 3
+		   esac
+		   Clean 
+		   EchoBold "Major upgrade complete." ;;
+
+	esac
+}
+
+### Main ###
+
+unset GREP_OPTIONS
+LC_CTYPE=C
+
+ScriptFullName="$0"
+ScriptName="$(basename "$0")" 
+CFILE="$ScriptName.conf"
+if ! [ -e "$CFILE" ]; then
+	echo "Error: cannot open configuration file $CFILE"
+	exit 1
+fi
+TMP_FILE=~/$ScriptName.tmp
+
+# Hook name attributions
+for i in $(seq 1 $MAX_HOOKS); do
+	r="$(echo "$LHOOKS"|egrep -o "$i\S*"|cut -c2-)"
+	eval "hook${i}_name="$r""
+done
+
+case "$1" in
+	check)	ParseConfFile; Check ;;
+	com*)	ParseConfFile; CommentFile on ;;
+	uncom*)	ParseConfFile; CommentFile off ;;
+	cont*)	if ! [ -e $TMP_FILE ]; then
+			echo "No trace of pending upgrade."
+			return 1
+		fi
+		ParseConfFile
+		Continue ;;
+	clean)  Clean ;;
+	*)	# Release mentionned?
+		Upgrade "$1";;
+esac
+
