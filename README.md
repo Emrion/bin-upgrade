@@ -3,6 +3,7 @@
 This is a try to automate in some ways the FreeBSD binary upgrade (`freebsd-update`).  
 It's not a means to do an unatended upgrade.
 Indeed, there is just as much or more interaction than the use of `freebsd-update`.  
+To be clear, I wrote this to avoid oversight during an upgrade.
 
 **WARNING**: this is a beta version for the moment. Do not use on a system you care for.
 
