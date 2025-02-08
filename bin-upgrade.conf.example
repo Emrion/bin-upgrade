@@ -21,7 +21,7 @@ if_re
 # Use the official FreeBSD repo kmod_*_${VERSION_MINOR} to get the right versions
 pkg delete drm-61-kmod realtek-re-kmod
 pkg install drm-61-kmod realtek-re-kmod
-echo "Time to check the new kernel modules."
+# Time to check the new kernel modules -> Forced exit
 exit
 
 @ after-uncomment
