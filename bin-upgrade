@@ -10,10 +10,19 @@ readonly LHOOKS=" 1prelude 2after-comment 3before-reboot \
 readonly MAX_HOOKS="8"
 readonly Bold=`tput bold`
 readonly Normal=`tput sgr0`
+readonly Version="0.1.0"
 
 EchoBold()
 {
 	echo "$Bold$1$Normal"
+}
+
+TestRoot()
+{
+	if [ $(id -u) -ne 0 ]; then
+		echo "You need to be root."
+		exit 1
+	fi
 }
 
 # Complain  (warning | error) message [LineNumber LineContent] 
@@ -271,11 +280,15 @@ ExecuteHook()
 		cmd="$(echo "$r" | cut -f$cn -d$HOOK_DEL)"
 		i=1
 		while [ -n "$cmd" ]; do
-			EchoBold "$ScriptName is executing: $cmd"
+			EchoBold "$ScriptName is executing: $cmd"	
 			eval "$cmd"
 			i=$((i+1))
 			sed -i "" "s/HookCN=[0-9]*/HookCN=$i/1" $TMP_FILE
 			cmd="$(echo "$r" | cut -f$i -d$HOOK_DEL)"
+			if [ -n "$(echo "$cmd"| fgrep exit)" ]; then
+				j=$((i+1))
+				sed -i "" "s/HookCN=[0-9]*/HookCN=$j/1" $TMP_FILE
+			fi
 		done
 	fi
 	sed -i "" "s/Hook=[0-9]/Hook=1/1" $TMP_FILE
@@ -286,34 +299,24 @@ Clean()
 	rm $TMP_FILE  > /dev/null 2>&1
 }
 
-Usage()
-{
-	# global ScriptName
-cat << EndOfHelp
-Usage: $ScriptName command
-command can be one of:
-   check: try to parse the conf file.
-   com: comment the speficied lines in the designated files.
-   uncom: uncomment the speficied lines in the designated files.
-   cont: to use after kernel upgrade and reboot.
-   clean: to reset the upgrade process (remove temp file).
-   XX.x-RELEASE: upgrade to this release.
-EndOfHelp
-	exit 1
-}
-
 # RunInstall stage
 RunInstall()
 {
-	freebsd-update install	
-	if  [ $? -eq 0 ]; then
-		sed -i "" "s/Install=[0-9]/Install=$1/1" $TMP_FILE
-	else
-		case "$1" in
+	case "$1" in
 			1) n="kernel installation";;
 			2) n="base installation";;
 			3) n="old files removing" ;;
 		esac
+
+	if ($DryRun); then
+		echo "Dry-run: freebsd-update install ($n)"
+	else
+		EchoBold "Now: $n."
+		freebsd-update install
+	fi	
+	if  [ $? -eq 0 ]; then
+		sed -i "" "s/Install=[0-9]/Install=$1/1" $TMP_FILE
+	else
 		EchoBold "Error during the $n."
 		exit 1
 	fi
@@ -322,7 +325,11 @@ RunInstall()
 # DoFetch release
 DoFetch()
 {
-	freebsd-update -r "$1" upgrade
+	if ($DryRun); then
+		echo "Dry-run: freebsd-update -r "$1" upgrade"
+	else
+		freebsd-update -r "$1" upgrade
+	fi
 	if  [ $? -eq 0 ]; then
 		sed -i "" "s/Fetch=[0-9]/Fetch=1/1" $TMP_FILE
 	else
@@ -338,6 +345,13 @@ Upgrade()
 
 	if [ -z "$(echo "$Release"|grep '\-RELEASE')" ]; then
 			Usage
+	fi
+	if [ -n "$(echo "$Release"|grep -e '^n\-')" ]; then
+		DryRun=true
+		Release="$(echo "$Release"|sed -e 's/n\-//')"
+	else
+		DryRun=false
+		TestRoot
 	fi
 	hr="$(uname -r | cut -d- -f1 | tr -d .)"
 	rr="$(echo $Release | cut -d- -f1 | tr -d .)"
@@ -358,7 +372,7 @@ Upgrade()
 	fi		
 	ParseConfFile
 	echo -e "Stage=1\nHook=0\nHookCN=1\nCom=0\nFetch=0\nInstall=0 \
- \nRelease=$Release\nMajor=$Major" > $TMP_FILE
+ \nRelease=$Release\nMajor=$Major\nDryRun=$DryRun" > $TMP_FILE
 	ExecuteHook 1
 	CommentFile on
 	sed -i "" "s/Com=[0-9]/Com=1/1" $TMP_FILE
@@ -374,8 +388,12 @@ Continue()
 	local rk ik
 
 	. $TMP_FILE
+
+	if ! ($DryRun); then
+		TestRoot
+	fi
 	if ! [ "$Hook" -eq "1" ]; then
-		ExecuteHook "$Stage"
+		ExecuteHook "$Stage" "$HookCN"
 	fi
 	
 	case "$Stage" in
@@ -432,7 +450,9 @@ Continue()
 		   fi ;;
 
 		7) EchoBold "Change of major version -> Upgrade of all packages."
-		   pkg-static upgrade -f
+		   if ! ($DryRun); then		   
+			pkg-static upgrade -f
+		   fi
 		   if [ "$?" -ne "0" ]; then
 			EchoBold "Error during pkg upgrade. Correct the problem, then run: $ScriptName cont."
 			exit 1
@@ -451,10 +471,29 @@ Continue()
 	esac
 }
 
+Usage()
+{
+	# global ScriptName
+cat << EndOfHelp
+Usage: $ScriptName command
+command can be one of:
+   check: try to parse the conf file.
+   com: comment the speficied lines in the designated files.
+   uncom: uncomment the speficied lines in the designated files.
+   cont: to use after kernel upgrade and reboot.
+   clean: to reset the upgrade process (remove temp file).
+   XX.x-RELEASE: upgrade to this release.
+      Prefix by 'n-' to do a dry run. Hooks will be executed.
+EndOfHelp
+	exit 1
+}
+
 ### Main ###
 
 unset GREP_OPTIONS
 LC_CTYPE=C
+
+echo "Version: $Version"
 
 ScriptFullName="$0"
 ScriptName="$(basename "$0")" 
