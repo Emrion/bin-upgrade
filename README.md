@@ -14,7 +14,8 @@ Usage: `bin-upgrade command`
 * **uncom**: uncomment the speficied lines in the designated files.  
 * **cont**: to use after kernel upgrade and reboot.  
 * **clean**: to reset the upgrade process (remove temp file).  
-* **XX.x-RELEASE**: upgrade to this release.  
+* **XX.x-RELEASE**: upgrade to this release.
+  * Prefix by 'n-' to do a dry run. Hooks will be executed.
 ---------------------------------  
 
 Doing an upgrade involves several things, among them: 
