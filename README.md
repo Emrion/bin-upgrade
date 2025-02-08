@@ -1,8 +1,10 @@
 # bin-upgrade
 
-This is a try to automate in a way the FreeBSD binary upgrade (`freebsd-update`).  
+This is a try to automate in some ways the FreeBSD binary upgrade (`freebsd-update`).  
 But, it's not a means to do an unatended upgrade.
 Indeed, there is just as much or more interaction than the use of `freebsd-update`.  
+
+**WARNING**: this is a beta version for the moment. Do not use on a system you care for.
 
 ---------------------------------
 Usage: `bin-upgrade command`  
@@ -15,7 +17,7 @@ Usage: `bin-upgrade command`
 * **XX.x-RELEASE**: upgrade to this release.  
 ---------------------------------  
 
-Doing an upgrade involves several things: 
+Doing an upgrade involves several things, among them: 
 - Make a backup of the system (if not automatic).
 - Disable some module loading at startup to avoid crash.
 - Disable the graphical login manager if any.
@@ -30,7 +32,7 @@ This tool proposes to do for you some of these things instead of doing them manu
 
 It has two features:
 - Comment out selected lines in the config files (and uncomment them once the upgrade is finished).
-- Execute some commands of your choice at a given stage of the procedure.
+- Execute some commands of your choice at a given stage of the procedure (also called "hooks").
 
 It needs a configuration file where you put your actions (see bin-upgrade.conf.example).  
 
@@ -50,9 +52,10 @@ The different stages are:
 - **pkg-upgraded**: you are asked if it's ok to remove old shared files (libs). After this possibly last `freebsd-update install`, this is the end of the major upgrade.
 
 For these commands, at any stage, you have access to two special variables:
-- $Release (e.g. '14.2-RELEASE').
+- $Release: the target RELEASE for upgrade (e.g. '14.2-RELEASE').
 - $Major: true if this is a major upgrade.
 
+Note that the command `exit` is allowed in a stage hook. The script is then stopped. You can resume it with `bin-upgrade cont`.
 
 
 
