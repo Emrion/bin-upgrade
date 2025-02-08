@@ -280,15 +280,15 @@ ExecuteHook()
 		cmd="$(echo "$r" | cut -f$cn -d$HOOK_DEL)"
 		i=1
 		while [ -n "$cmd" ]; do
-			EchoBold "$ScriptName is executing: $cmd"	
-			eval "$cmd"
+			EchoBold "$ScriptName is executing: $cmd"
 			i=$((i+1))
+			if [ -n "$(echo "$cmd"| fgrep exit)" ]; then
+				sed -i "" "s/HookCN=[0-9]*/HookCN=$i/1" $TMP_FILE
+			fi	
+			eval "$cmd"
 			sed -i "" "s/HookCN=[0-9]*/HookCN=$i/1" $TMP_FILE
 			cmd="$(echo "$r" | cut -f$i -d$HOOK_DEL)"
-			if [ -n "$(echo "$cmd"| fgrep exit)" ]; then
-				j=$((i+1))
-				sed -i "" "s/HookCN=[0-9]*/HookCN=$j/1" $TMP_FILE
-			fi
+			
 		done
 	fi
 	sed -i "" "s/Hook=[0-9]/Hook=1/1" $TMP_FILE
