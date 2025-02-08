@@ -253,22 +253,28 @@ CommentFile()
 	done
 }
 
-# ExecuteHook StageNumber
+# ExecuteHook StageNumber [command number]
 ExecuteHook()
 {
-	local r s
+	local r s cn
+	cn="$2"
+	if [ -z "$cn" ]; then
+		cn=1
+	fi
+
 	eval "r=\"\$hook$1_cmd\""
 	eval "s=\"\$hook$1_name\""
 	EchoBold "Current stage: $s"
 	sed -i "" "s/Stage=[0-9]/Stage=$1/1" $TMP_FILE
 	sed -i "" "s/Hook=[0-9]/Hook=0/1" $TMP_FILE
 	if [ -n "$r" ]; then
-		cmd="$(echo "$r" | cut -f1 -d$HOOK_DEL)"
+		cmd="$(echo "$r" | cut -f$cn -d$HOOK_DEL)"
 		i=1
 		while [ -n "$cmd" ]; do
 			EchoBold "$ScriptName is executing: $cmd"
 			eval "$cmd"
 			i=$((i+1))
+			sed -i "" "s/HookCN=[0-9]*/HookCN=$i/1" $TMP_FILE
 			cmd="$(echo "$r" | cut -f$i -d$HOOK_DEL)"
 		done
 	fi
@@ -351,7 +357,8 @@ Upgrade()
 		Major=false
 	fi		
 	ParseConfFile
-	echo -e "Stage=1\nHook=0\nCom=0\nFetch=0\nInstall=0\nRelease=$Release\nMajor=$Major" > $TMP_FILE
+	echo -e "Stage=1\nHook=0\nHookCN=1\nCom=0\nFetch=0\nInstall=0 \
+ \nRelease=$Release\nMajor=$Major" > $TMP_FILE
 	ExecuteHook 1
 	CommentFile on
 	sed -i "" "s/Com=[0-9]/Com=1/1" $TMP_FILE
