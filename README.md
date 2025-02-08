@@ -1,7 +1,7 @@
 # bin-upgrade
 
 This is a try to automate in some ways the FreeBSD binary upgrade (`freebsd-update`).  
-But, it's not a means to do an unatended upgrade.
+It's not a means to do an unatended upgrade.
 Indeed, there is just as much or more interaction than the use of `freebsd-update`.  
 
 **WARNING**: this is a beta version for the moment. Do not use on a system you care for.
