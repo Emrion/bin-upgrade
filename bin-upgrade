@@ -231,6 +231,7 @@ Comment()
 	fi	
 }
 
+# CommentFile mode
 CommentFile()
 {
 	local mode="$1"
@@ -262,7 +263,7 @@ CommentFile()
 	done
 }
 
-# ExecuteHook StageNumber [command number]
+# ExecuteHook StageNumber [command_number]
 ExecuteHook()
 {
 	local r s cn
@@ -303,10 +304,10 @@ Clean()
 RunInstall()
 {
 	case "$1" in
-			1) n="kernel installation";;
-			2) n="base installation";;
-			3) n="old files removing" ;;
-		esac
+		1) n="kernel installation";;
+		2) n="base installation";;
+		3) n="old files removing" ;;
+	esac
 
 	if ($DryRun); then
 		echo "Dry-run: freebsd-update install ($n)"
