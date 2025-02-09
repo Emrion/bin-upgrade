@@ -22,7 +22,9 @@ Usage: `bin-upgrade command`
 Options:
 * -f: don't check "XX.x-RELEASE", instead pass it directly to `freebsd-update`. 
 * -r: run in real mode (no dry run). Execute `freebsd-update`.
+
 Both options have no effect for others commands than XX.x-RELEASE.
+
 ---------------------------------  
 
 Doing an upgrade may involve several things, among them: 
