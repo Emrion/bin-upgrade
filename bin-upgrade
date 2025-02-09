@@ -5,8 +5,8 @@ readonly COMMENT_TOK="#"
 readonly HOOK_TOK="@"
 readonly SEDEL="!"
 readonly HOOK_DEL="#"
-readonly LHOOKS=" 1prelude 2after-comment 3before-reboot \
-4kernel-ok 5base-installed 6after-uncomment 7major-upgrade 8pkg-upgraded"
+readonly LHOOKS=" 1prelude 2after-comment 3before-reboot 4kernel-ok \
+5base-installed 6after-uncomment 7major-upgrade 8pkg-upgraded"
 readonly MAX_HOOKS="8"
 readonly Bold=`tput bold`
 readonly Normal=`tput sgr0`
@@ -263,11 +263,19 @@ CommentFile()
 	done
 }
 
+# WriteTmp VarName Value
+WriteTmp()
+{
+	sed -i "" "s/$1=[0-9]*/$1=$2/1" $TMP_FILE
+}
+
 # ExecuteHook StageNumber [command_number]
 ExecuteHook()
 {
 	local r s cn
 	cn="$2"
+	ReturnUsed=false
+
 	if [ -z "$cn" ]; then
 		cn=1
 	fi
@@ -275,24 +283,28 @@ ExecuteHook()
 	eval "r=\"\$hook$1_cmd\""
 	eval "s=\"\$hook$1_name\""
 	EchoBold "Current stage: $s"
-	sed -i "" "s/Stage=[0-9]/Stage=$1/1" $TMP_FILE
-	sed -i "" "s/Hook=[0-9]/Hook=0/1" $TMP_FILE
+	WriteTmp Stage $1
+	WriteTmp Hook 0
 	if [ -n "$r" ]; then
-		cmd="$(echo "$r" | cut -f$cn -d$HOOK_DEL)"
-		i=1
+		i="$cn"
+		cmd="$(echo "$r" | cut -f$i -d$HOOK_DEL)"
 		while [ -n "$cmd" ]; do
 			EchoBold "$ScriptName is executing: $cmd"
 			i=$((i+1))
-			if [ -n "$(echo "$cmd"| fgrep exit)" ]; then
-				sed -i "" "s/HookCN=[0-9]*/HookCN=$i/1" $TMP_FILE
-			fi	
+			case "$cmd" in
+				*exit*)	  WriteTmp HookCN $i ;;
+				*return*) WriteTmp Hook 1
+					  ReturnUsed=true ;;
+			esac
 			eval "$cmd"
-			sed -i "" "s/HookCN=[0-9]*/HookCN=$i/1" $TMP_FILE
 			cmd="$(echo "$r" | cut -f$i -d$HOOK_DEL)"
-			
+			if ($ReturnUsed); then
+				ReturnUsed=false
+				WriteTmp Hook 0
+			fi
 		done
 	fi
-	sed -i "" "s/Hook=[0-9]/Hook=1/1" $TMP_FILE
+	WriteTmp Hook 1
 }
 
 Clean()
@@ -316,7 +328,7 @@ RunInstall()
 		freebsd-update install
 	fi	
 	if  [ $? -eq 0 ]; then
-		sed -i "" "s/Install=[0-9]/Install=$1/1" $TMP_FILE
+		WriteTmp Install $1
 	else
 		EchoBold "Error during the $n."
 		exit 1
@@ -332,7 +344,7 @@ DoFetch()
 		freebsd-update -r "$1" upgrade
 	fi
 	if  [ $? -eq 0 ]; then
-		sed -i "" "s/Fetch=[0-9]/Fetch=1/1" $TMP_FILE
+		WriteTmp Fetch 1
 	else
 		EchoBold "Error during the fetching of patches."
 		exit 1
@@ -344,26 +356,28 @@ Upgrade()
 	Release="$1"
 	local cmv tmv
 
-	if [ -z "$(echo "$Release"|grep '\-RELEASE')" ]; then
-			Usage
-	fi
-	if [ -n "$(echo "$Release"|grep -e '^n\-')" ]; then
-		DryRun=true
-		Release="$(echo "$Release"|sed -e 's/n\-//')"
-	else
-		DryRun=false
+	if ! ($DryRun); then
 		TestRoot
 	fi
-	hr="$(uname -r | cut -d- -f1 | tr -d .)"
+
+	# We need the version target anyway
 	rr="$(echo $Release | cut -d- -f1 | tr -d .)"
-	if [ "$rr" -lt "$hr" ]; then
-		echo "Cannot downgrade a RELEASE."
-	exit 1
+
+	if ($CheckRelease); then
+		if [ -z "$(echo "$Release"|grep '\-RELEASE')" ]; then
+			Usage
+		fi
+		hr="$(uname -r | cut -d- -f1 | tr -d .)"
+		if [ "$rr" -lt "$hr" ]; then
+			echo "Cannot downgrade a RELEASE."
+			exit 1
+		fi
+		if [ "$rr" -eq "$hr" ]; then
+			echo "Nothing to do!"
+			exit 1
+		fi
 	fi
-	if [ "$rr" -eq "$hr" ]; then
-		echo "Nothing to do!"
-		exit 1
-	fi
+	
 	cmv=$(freebsd-version | cut -d. -f1)
 	tmv=$(echo $Release | cut -d. -f1)
 	if ! [ "$cmv" = "$tmv" ]; then 
@@ -376,7 +390,7 @@ Upgrade()
  \nRelease=$Release\nMajor=$Major\nDryRun=$DryRun" > $TMP_FILE
 	ExecuteHook 1
 	CommentFile on
-	sed -i "" "s/Com=[0-9]/Com=1/1" $TMP_FILE
+	WriteTmp Com 1
 	ExecuteHook 2
 	DoFetch $Release
 	RunInstall 1 # Kernel install
@@ -390,10 +404,7 @@ Continue()
 
 	. $TMP_FILE
 
-	if ! ($DryRun); then
-		TestRoot
-	fi
-	if ! [ "$Hook" -eq "1" ]; then
+	if [ "$Hook" -eq "0" ]; then
 		ExecuteHook "$Stage" "$HookCN"
 	fi
 	
@@ -401,7 +412,7 @@ Continue()
 
 		1) if [ "$Com" -ne "1" ]; then
 			CommentFile on
-			sed -i "" "s/Com=[0-9]/Com=1/1" $TMP_FILE
+			WriteTmp Com 1
 		   fi
 		   ExecuteHook 2
 		   Continue ;;
@@ -433,13 +444,13 @@ Continue()
 		   Continue ;;
 
 		5) CommentFile off
-		   sed -i "" "s/Com=[0-9]/Com=0/1" $TMP_FILE
+		   WriteTmp Com 0
 		   ExecuteHook 6
 		   Continue ;;
 			
 		6) if [ "$Com" -ne "0" ]; then
 			CommentFile off
-			sed -i "" "s/Com=[0-9]/Com=1/1" $TMP_FILE
+			WriteTmp Com 0
 		   fi
 		   if ! ($Major); then
 			Clean 
@@ -472,6 +483,14 @@ Continue()
 	esac
 }
 
+CheckPending()
+{
+	if ! [ -e $TMP_FILE ]; then
+		echo "No trace of pending upgrade."
+		exit 1
+	fi
+}
+
 Usage()
 {
 	# global ScriptName
@@ -481,10 +500,15 @@ command can be one of:
    check: try to parse the conf file.
    com: comment the speficied lines in the designated files.
    uncom: uncomment the speficied lines in the designated files.
-   cont: to use after kernel upgrade and reboot.
-   clean: to reset the upgrade process (remove temp file).
-   XX.x-RELEASE: upgrade to this release.
-      Prefix by 'n-' to do a dry run. Hooks will be executed.
+   cont: resume the upgrading process.
+   clean: to reset the upgrade process (remove the temp file).
+   XX.x-RELEASE: upgrade to this release. By default, it operates
+      in "dry run" mode. freebsd-update won't run but files will be
+      commented/uncommented and hooks executed.
+Options:
+   -f: don't check "XX.x-RELEASE", instead pass it directly to freebsd-update. 
+   -r: run in real mode. Execute freebsd-update.
+Both options have no effect for others commands than XX.x-RELEASE.
 EndOfHelp
 	exit 1
 }
@@ -498,6 +522,18 @@ echo "Version: $Version"
 
 ScriptFullName="$0"
 ScriptName="$(basename "$0")" 
+
+CheckRelease=true
+DryRun=true
+
+while getopts "fr" opt; do
+	case ${opt} in
+		f) CheckRelease=false; shift ;;
+		r) DryRun=false; shift ;;
+		*) Usage;;
+	esac
+done
+
 CFILE="$ScriptName.conf"
 if ! [ -e "$CFILE" ]; then
 	echo "Error: cannot open configuration file $CFILE"
@@ -511,17 +547,25 @@ for i in $(seq 1 $MAX_HOOKS); do
 	eval "hook${i}_name="$r""
 done
 
+echo "CheckRelease=$CheckRelease"
+echo "DryRun=$DryRun"
+
 case "$1" in
 	check)	ParseConfFile; Check ;;
 	com*)	ParseConfFile; CommentFile on ;;
 	uncom*)	ParseConfFile; CommentFile off ;;
-	cont*)	if ! [ -e $TMP_FILE ]; then
-			echo "No trace of pending upgrade."
-			return 1
+
+	cont*)	CheckPending
+		if ! ($DryRun); then
+			TestRoot
 		fi
 		ParseConfFile
 		Continue ;;
-	clean)  Clean ;;
+
+	clean)	CheckPending 
+		Clean;
+		echo "Upgrade process has been reinitialized." ;;
+
 	*)	# Release mentionned?
 		Upgrade "$1";;
 esac
