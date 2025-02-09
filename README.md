@@ -25,7 +25,7 @@ Options:
 Both options have no effect for others commands than XX.x-RELEASE.
 ---------------------------------  
 
-Doing an upgrade may involves several things, among them: 
+Doing an upgrade may involve several things, among them: 
 - Make a backup of the system (if not automatic).
 - Disable some module loading at startup to avoid crash.
 - Disable the graphical login manager if any.
