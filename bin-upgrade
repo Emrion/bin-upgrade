@@ -196,7 +196,7 @@ Check()
 	done
 }
 
-# Comment mode
+# Comment mode target_line
 Comment()
 {
 	local target="$2"
@@ -222,7 +222,7 @@ Comment()
 			fi ;;
 		check)
 			if [ "$fc" = "#" ]; then
-				replace="$target"echo "$Bold$1$Normal"
+				replace="$target"
 			else
 				replace="#$target" 
 			fi ;;
