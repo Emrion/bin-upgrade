@@ -251,11 +251,11 @@ CommentFile()
 		if [ -z "$data" ]; then
 			continue
 		fi
-		if [ "$mode" = "check" ]; then
-			echo "Will adjust file: $file..."
-		else
-			EchoBold "Adjusting file: $file..."
-		fi
+		case "$mode" in
+			check)	echo "Will adjust file: $file..." ;;
+			on)	EchoBold "Commenting file: $file..." ;;
+			off)	EchoBold "Uncommenting file: $file..." ;;
+		esac
 		echo -n "$data" | while read -r tokenline; do
 			line=$(grep "$tokenline" "$file")
 			if [ -z "$line" ]; then
