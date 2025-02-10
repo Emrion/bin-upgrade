@@ -536,7 +536,7 @@ while getopts "fr" opt; do
 	case ${opt} in
 		f) CheckRelease=false; shift ;;
 		r) DryRun=false; shift ;;
-		*) Usage;;
+		*) Usage ;;
 	esac
 done
 
@@ -561,10 +561,10 @@ case "$1" in
 		Continue ;;
 
 	clean)	CheckPending 
-		Clean;
+		Clean
 		echo "Upgrade process has been reinitialized." ;;
 
 	*)	# Release mentionned?
-		Upgrade "$1";;
+		Upgrade "$1" ;;
 esac
 
