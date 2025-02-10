@@ -74,6 +74,12 @@ ParseConfFile()
 	local line	# Currently examined line content
 	local Tok_open=false
 	local Paragraph r i
+	CFILE="$ScriptName.conf"
+
+	if ! [ -e "$CFILE" ]; then
+		echo "Error: cannot open configuration file $CFILE"
+		exit 1
+	fi
 
 	echo "Parsing $CFILE..."
 	while read -r line || [ -n "$line" ]; do
@@ -534,11 +540,6 @@ while getopts "fr" opt; do
 	esac
 done
 
-CFILE="$ScriptName.conf"
-if ! [ -e "$CFILE" ]; then
-	echo "Error: cannot open configuration file $CFILE"
-	exit 1
-fi
 TMP_FILE=~/$ScriptName.tmp
 
 # Hook name attributions
