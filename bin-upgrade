@@ -547,9 +547,6 @@ for i in $(seq 1 $MAX_HOOKS); do
 	eval "hook${i}_name="$r""
 done
 
-echo "CheckRelease=$CheckRelease"
-echo "DryRun=$DryRun"
-
 case "$1" in
 	check)	ParseConfFile; Check ;;
 	com*)	ParseConfFile; CommentFile on ;;
