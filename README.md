@@ -48,7 +48,7 @@ It has three features:
 It needs a configuration file where you put your actions (see bin-upgrade.conf.example).  
 
 In this configuration file, you introduce the name of a file by ':', like ':/etc/rc.conf'.
-The lines that follow are searched in this file and commented near the beginning of the upgrade. You don't need to write the whole line, but only the beginning. `bin-upgrade` will find the appropriate(s) line(s).  
+The lines that follow are searched in this file and commented near the beginning of the upgrade. You don't need to write the whole line, but only a significant part of it. `bin-upgrade` will find the appropriate(s) line(s), just ensure it's the one(s) you want.  
 
 The commands to execute are CLI, including any installed software. It must begin by '@' followed by the name of the stage. Then, each following line is executed in the writted order at the selected stage.  
 
