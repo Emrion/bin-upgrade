@@ -8,7 +8,7 @@ To be clear, I wrote this to avoid oversight during an upgrade.
 **WARNING**: this is a beta version for the moment. Do not use on a system you care for.
 
 ---------------------------------
-Usage: `bin-upgrade command`  
+Usage: `bin-upgrade command [-fpr]`  
 `command` can be one of:  
 * **check**: try to parse the conf file.  
 * **com**: comment the speficied lines in the designated files.  
@@ -21,9 +21,11 @@ Usage: `bin-upgrade command`
   
 Options:
 * -f: don't check "XX.x-RELEASE", instead pass it directly to `freebsd-update`. 
-* -r: run in real mode (no dry run). Execute `freebsd-update`.
+* -p: do not execute `pkg-static upgrade -f` in case of major upgrade.
+For security reason, it won't even propose to remove old files.
+* -r: run in real mode. Execute `freebsd-update`.
 
-Both options have no effect for others commands than XX.x-RELEASE.
+These options have no effect for others commands than XX.x-RELEASE.
 
 ---------------------------------  
 
@@ -43,7 +45,7 @@ This tool proposes to do for you some of these things instead of doing them manu
 It has three features:
 - Comment out selected lines in the config files (and uncomment them once the upgrade is finished).
 - Execute some commands of your choice at a given stage of the procedure (also called "hooks").
-- In case of major upgrade, execute `pkg-static -f upgrade` and propose to remove old shared files.
+- In case of major upgrade, execute `pkg-static -f upgrade` and propose to remove old shared files (unless -p option is selected).
 
 It needs a configuration file where you put your actions (see bin-upgrade.conf.example).  
 
@@ -59,14 +61,15 @@ The different stages are:
 - **kernel-ok**: the new kernel is active, but the base isn't yet installed.
 - **base-installed**: as the name, but some pieces may not be active until a reboot. This is the point where you need to install new third-party kernel modules.
 - **after-uncomment**: the target lines of the configuration files are uncommented. This is the end if the upgrade is minor.
-- **major-upgrade**: we are just before the automatic run of `pkg-static -f upgrade`.
-- **pkg-upgraded**: you are asked if it's ok to remove old shared files (libs). After this possibly last `freebsd-update install`, this is the end of the major upgrade.
+- **major-upgrade**: we are just before the automatic run of `pkg-static -f upgrade` (unless option -p was selected).
+- **pkg-upgraded**: you are asked if it's ok to remove old shared files (unless option -p was selected)). After this possibly last `freebsd-update install`, this is the end of the major upgrade.
 
 For these commands, at any stage, you have access to some variables, among them:
 - $Release: the target RELEASE for upgrade (e.g. '14.2-RELEASE').
 - $Major: true if this is a major upgrade.
-- $DryRun: true if it operates in dry run mode.
-- $CheckRelease: true if it checked the "XX.x-RELEASE" string.
+- $DryRun: true if it operates in dry run mode (option -r is selected).
+- $CheckRelease: true if it checked the "XX.x-RELEASE" string (no option -f).
+- $PortsUpgrade: true if the option -p was selected.
 - $cmd: the command line that it is executing.
 - $ScriptName: "bin-upgrade" unless you changed the file name.
 - $ScripFullName: as above plus the path.
@@ -91,9 +94,9 @@ These two shell commands have a special behaviour in a hook:
 - Install the script on the machine you want to upgrade.
 - Write a suited bin-upgrade.conf file.
 - Run: `bin-upgrade check` to see if something is wrong in the conf file. Read carefully what it writes to see if it is what you expect.
-- Be sure to not be root and run it in dry mode. It won't be able to change the system configuration files, nor execute potential harmful commands you put in the hooks. You don't need to reboot when asked for. Just type `bin-upgrade cont` to reach the end of the upgrade process. Again, read carefully what it would do. If you encounter an error, you can use `bin-upgrade clean` to reset the process.
-- Once the previous stage is validated, you can upgrade your system for real with `bin-upgrade -r XX.x-RELEASE`.
+- Be sure to not be root and run it in dry mode. It won't be able to change the system configuration files, nor execute potential harmful commands you put in the hooks. Type `bin-upgrade cont` when asked to reach the end of the upgrade process. Again, read carefully what it would do. If you encounter an error, you can use `bin-upgrade clean` to reset the process.
+- Once the previous stage is validated, you can upgrade your system for real with `bin-upgrade XX.x-RELEASE -r`.
 
-Note: you can upgrade to a non-RELEASE version with the -f option. Example: `bin-upgrade -r -f 13.5-BETA1`.
+Note: you can upgrade to a non-RELEASE version with the -f option. Example: `bin-upgrade 13.5-BETA1 -rf`.
 
 
