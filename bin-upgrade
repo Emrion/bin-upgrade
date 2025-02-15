@@ -362,6 +362,12 @@ Upgrade()
 	Release="$1"
 	local cmv tmv
 
+	if [ -e "$TMP_FILE" ]; then
+		echo "An upgrade is already in progress."
+		echo "Use '$ScriptName cont' to continue it, or"
+		echo "use '$ScriptName clean' to cancel it."
+		exit 1
+	fi
 	if ! ($DryRun); then
 		TestRoot
 	fi
@@ -497,7 +503,7 @@ Continue()
 
 CheckPending()
 {
-	if ! [ -e $TMP_FILE ]; then
+	if ! [ -e "$TMP_FILE" ]; then
 		echo "No trace of pending upgrade."
 		exit 1
 	fi
