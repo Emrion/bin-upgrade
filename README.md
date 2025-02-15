@@ -62,7 +62,7 @@ The different stages are:
 - **base-installed**: as the name, but some pieces may not be active until a reboot. This is the point where you need to install new third-party kernel modules.
 - **after-uncomment**: the target lines of the configuration files are uncommented. This is the end if the upgrade is minor.
 - **major-upgrade**: we are just before the automatic run of `pkg-static -f upgrade` (unless option -p was selected).
-- **pkg-upgraded**: you are asked if it's ok to remove old shared files (unless option -p was selected)). After this possibly last `freebsd-update install`, this is the end of the major upgrade.
+- **pkg-upgraded**: you are asked if it's ok to remove old shared files (unless option -p was selected). After this possibly last `freebsd-update install`, this is the end of the major upgrade.
 
 For these commands, at any stage, you have access to some variables, among them:
 - $Release: the target RELEASE for upgrade (e.g. '14.2-RELEASE').
