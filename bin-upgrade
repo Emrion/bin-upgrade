@@ -8,9 +8,9 @@ readonly HOOK_DEL="#"
 readonly LHOOKS=" 1prelude 2after-comment 3before-reboot 4kernel-ok \
 5base-installed 6after-uncomment 7major-upgrade 8pkg-upgraded"
 readonly MAX_HOOKS="8"
-readonly Bold=`tput bold`
-readonly Normal=`tput sgr0`
-readonly Version="0.1.0"
+readonly Bold="$(tput bold)"
+readonly Normal="$(tput sgr0)"
+readonly Version="0.2.0"
 
 EchoBold()
 {
@@ -103,7 +103,7 @@ ParseConfFile()
 				CheckMiss $Tok_open "$Paragraph" $cln
 				line="$(echo -n "$line" | sed "s/[$HOOK_TOK \t]//g")"
 				Tok_open=true
-				r="$(echo "$LHOOKS"|egrep -o " [0-9]$line")"
+				r="$(echo "$LHOOKS"|grep -o -E " [0-9]$line")"
 				if [ -z "$r" ]; then
 					Complain e "Illegal hook name" "$cln" "$line"
 				fi
@@ -122,7 +122,7 @@ ParseConfFile()
 						$FILE_TOK*)
 							eval "data${nF}=$(echo -e \"\$line\\n\$data${nF}\")" ;;
 						$HOOK_TOK*)
-							if [ "$(echo "$line"|fgrep -c "$HOOK_DEL")" -ne "0" ]; then
+							if [ "$(echo "$line"|grep -c -F "$HOOK_DEL")" -ne "0" ]; then
 								Complain e "Prohibited character: $HOOK_DEL" "$cln" "$line"
 								exit 1
 							fi
@@ -162,7 +162,7 @@ Check()
 			Complain w "this file has no data line"
 		else
 			echo -n "$data" | while read -r tokenline; do
-				nO=$(fgrep -c "$tokenline" "$file")
+				nO=$(grep -c -F "$tokenline" "$file")
 				if [ "$nO" -eq "0" ]; then
 					Complain w "no occurence of \"$tokenline\" in $file"
 				fi
@@ -393,15 +393,9 @@ Upgrade()
 	fi		
 	ParseConfFile
 	echo -e "Stage=1\nHook=0\nHookCN=1\nCom=0\nFetch=0\nInstall=0 \
- \nRelease=$Release\nMajor=$Major\nDryRun=$DryRun" > $TMP_FILE
+ \nRelease=$Release\nMajor=$Major\nDryRun=$DryRun\nPortsUpgrade=$PortsUpgrade" > $TMP_FILE
 	ExecuteHook 1
-	CommentFile on
-	WriteTmp Com 1
-	ExecuteHook 2
-	DoFetch $Release
-	RunInstall 1 # Kernel install
-	ExecuteHook 3
-	EchoBold "Reboot your machine, then run: $ScriptFullName cont"
+	Continue
 }
 
 Continue()
@@ -430,8 +424,12 @@ Continue()
 			RunInstall 1
 		   fi
 		   ExecuteHook 3
-		   EchoBold "Reboot your machine, then run: $ScriptFullName cont"
-		   exit 0 ;;
+		   if ($DryRun); then
+		   	EchoBold "To continue, run: $ScriptFullName cont"	
+		   else
+			EchoBold "Reboot your machine, then run: $ScriptFullName cont"
+		   fi
+		   exit 0 ;; 
 
 		3) rk="$(freebsd-version -r | cut -d - -f 1 | tr -d .)"
 		   ik="$(freebsd-version -k | cut -d - -f 1 | tr -d .)"
@@ -467,9 +465,15 @@ Continue()
 			Continue
 		   fi ;;
 
-		7) EchoBold "Change of major version -> Upgrade of all packages."
-		   if ! ($DryRun); then		   
-			pkg-static upgrade -f
+		7) if ($PortsUpgrade); then
+			EchoBold "Change of major version -> Skipping binary upgrade (option -p)."
+		   else
+		   	EchoBold "Change of major version -> Upgrade of all packages."
+		  	if ! ($DryRun); then		   
+				pkg-static upgrade -f
+		   	else
+				echo "Dry-run: pkg-static upgrade -f"
+			fi
 		   fi
 		   if [ "$?" -ne "0" ]; then
 			EchoBold "Error during pkg upgrade. Correct the problem, then run: $ScriptName cont."
@@ -478,11 +482,13 @@ Continue()
 		   ExecuteHook 8
 		   Continue ;;
 
-		8) echo -n "${Bold}Ok to remove old shared files (y/N)? $Normal"
-		   read rep
-		   case "$rep" in
-			[yY]*)	RunInstall 3
-		   esac
+		8) if ! ($PortsUpgrade); then
+		   	echo -n "${Bold}Ok to remove old shared files (y/N)? $Normal"
+		   	read rep
+		   	case "$rep" in
+				[yY]*)	RunInstall 3 ;;
+		   	esac
+		   fi
 		   Clean 
 		   EchoBold "Major upgrade complete." ;;
 
@@ -501,7 +507,7 @@ Usage()
 {
 	# global ScriptName
 cat << EndOfHelp
-Usage: $ScriptName command
+Usage: $ScriptName command [-fpr]
 command can be one of:
    check: try to parse the conf file.
    com: comment the speficied lines in the designated files.
@@ -513,8 +519,10 @@ command can be one of:
       commented/uncommented and hooks executed.
 Options:
    -f: don't check "XX.x-RELEASE", instead pass it directly to freebsd-update. 
+   -p: do not execute pkg-static upgrade -f in case of major upgrade.
+       For security reason, it won't even propose to remove old files.
    -r: run in real mode. Execute freebsd-update.
-Both options have no effect for others commands than XX.x-RELEASE.
+These options have no effect for others commands than XX.x-RELEASE.
 EndOfHelp
 	exit 1
 }
@@ -531,12 +539,17 @@ ScriptName="$(basename "$0")"
 
 CheckRelease=true
 DryRun=true
+PortsUpgrade=false
 
-while getopts "fr" opt; do
+Command="$1"
+shift
+
+while getopts "frp" opt; do
 	case ${opt} in
-		f) CheckRelease=false; shift ;;
-		r) DryRun=false; shift ;;
-		*) Usage ;;
+		f) CheckRelease=false;;
+		r) DryRun=false;;
+		p) PortsUpgrade=true;;
+		*) Usage;;
 	esac
 done
 
@@ -544,11 +557,11 @@ TMP_FILE=~/$ScriptName.tmp
 
 # Hook name attributions
 for i in $(seq 1 $MAX_HOOKS); do
-	r="$(echo "$LHOOKS"|egrep -o "$i\S*"|cut -c2-)"
+	r="$(echo "$LHOOKS"|grep -o -E "$i\S*"|cut -c2-)"
 	eval "hook${i}_name="$r""
 done
 
-case "$1" in
+case "$Command" in
 	check)	ParseConfFile; Check ;;
 	com*)	ParseConfFile; CommentFile on ;;
 	uncom*)	ParseConfFile; CommentFile off ;;
@@ -561,10 +574,12 @@ case "$1" in
 		Continue ;;
 
 	clean)	CheckPending 
-		Clean
+		Clean;
 		echo "Upgrade process has been reinitialized." ;;
 
+	-*)	Usage ;; # If an option takes the place of the command
+
 	*)	# Release mentionned?
-		Upgrade "$1" ;;
+		Upgrade "$Command";;
 esac
 
