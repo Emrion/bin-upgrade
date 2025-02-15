@@ -362,12 +362,6 @@ Upgrade()
 	Release="$1"
 	local cmv tmv
 
-	if [ -e "$TMP_FILE" ]; then
-		echo "An upgrade is already in progress."
-		echo "Use '$ScriptName cont' to continue it, or"
-		echo "use '$ScriptName clean' to cancel it."
-		exit 1
-	fi
 	if ! ($DryRun); then
 		TestRoot
 	fi
@@ -388,6 +382,12 @@ Upgrade()
 			echo "Nothing to do!"
 			exit 1
 		fi
+	fi
+	if [ -e "$TMP_FILE" ]; then
+		echo "An upgrade is already in progress."
+		echo "Use '$ScriptName cont' to continue it, or"
+		echo "use '$ScriptName clean' to cancel it."
+		exit 1
 	fi
 	
 	cmv=$(freebsd-version | cut -d. -f1)
