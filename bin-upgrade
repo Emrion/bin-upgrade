@@ -332,13 +332,14 @@ RunInstall()
 	else
 		EchoBold "Now: $n."
 		freebsd-update install
+		if  [ $? -eq 0 ]; then
+			WriteTmp Install $1
+		else
+			EchoBold "Error during the $n."
+			exit 1
+		fi
 	fi	
-	if  [ $? -eq 0 ]; then
-		WriteTmp Install $1
-	else
-		EchoBold "Error during the $n."
-		exit 1
-	fi
+	
 }
 
 # DoFetch release
@@ -348,13 +349,14 @@ DoFetch()
 		echo "Dry-run: freebsd-update -r "$1" upgrade"
 	else
 		freebsd-update -r "$1" upgrade
+		if  [ $? -eq 0 ]; then
+			WriteTmp Fetch 1
+		else
+			EchoBold "Error during the fetching of patches."
+			exit 1
+		fi
 	fi
-	if  [ $? -eq 0 ]; then
-		WriteTmp Fetch 1
-	else
-		EchoBold "Error during the fetching of patches."
-		exit 1
-	fi
+	
 }
 
 Upgrade()
@@ -477,14 +479,15 @@ Continue()
 		   	EchoBold "Change of major version -> Upgrade of all packages."
 		  	if ! ($DryRun); then		   
 				pkg-static upgrade -f
+				if [ "$?" -ne "0" ]; then
+					EchoBold "Error during pkg upgrade. Correct the problem, then run: $ScriptName cont."
+					exit 1
+		   		fi
 		   	else
 				echo "Dry-run: pkg-static upgrade -f"
 			fi
 		   fi
-		   if [ "$?" -ne "0" ]; then
-			EchoBold "Error during pkg upgrade. Correct the problem, then run: $ScriptName cont."
-			exit 1
-		   fi
+		   
 		   ExecuteHook 8
 		   Continue ;;
 
