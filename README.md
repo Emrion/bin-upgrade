@@ -67,7 +67,7 @@ The different stages are:
 For these commands, at any stage, you have access to some variables, among them:
 - $Release: the target RELEASE for upgrade (e.g. '14.2-RELEASE').
 - $Major: true if this is a major upgrade.
-- $DryRun: true if it operates in dry run mode (option -r is selected).
+- $DryRun: true if it operates in dry run mode (option -r isn't selected).
 - $CheckRelease: true if it checked the "XX.x-RELEASE" string (no option -f).
 - $PortsUpgrade: true if the option -p was selected.
 - $cmd: the command line that it is executing.
