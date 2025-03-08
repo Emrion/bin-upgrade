@@ -583,7 +583,7 @@ case "$Command" in
 		Continue ;;
 
 	clean)	CheckPending 
-		Clean;
+		Clean
 		echo "Upgrade process has been reinitialized." ;;
 
 	-*)	Usage ;; # If an option takes the place of the command
